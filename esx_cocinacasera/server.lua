@@ -1,53 +1,40 @@
 -- ====================================================================
--- MÓDULO 3: LADO DEL SERVIDOR (server.lua) - FINAL
--- Añade: Bloqueo por Trabajo, Probabilidad de Falla, y lógica de retraso.
+-- MÓDULO 3: LADO DEL SERVIDOR (server.lua) - FINAL (Progresión)
+-- Añade: Bloqueo por Nivel, Cálculo de Falla Dinámico y Control de Cancelación.
 -- ====================================================================
 
 ESX = nil
+-- Nuevo: Almacenar estado de cocina para prevenir exploits de cancelación
+local PlayersCooking = {} 
 
 TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
--- 1. Definición de las recetas (¡DEBE COINCIDIR CON CLIENTE!)
-local Recetas = {
-    ['guisado'] = {
-        label = 'Guisado Casero',
-        ingredientes = {
-            { item = 'carne', cantidad = 2 },
-            { item = 'vegetales', cantidad = 1 },
-            { item = 'sal', cantidad = 1 }
-        },
-        trabajoRequerido = 'chef', -- Necesita ser chef
-        probabilidadFalla = 15 -- 15% de probabilidad de falla
-    },
-    ['ensalada'] = {
-        label = 'Ensalada Refrescante',
-        ingredientes = {
-            { item = 'vegetales', cantidad = 3 }
-        },
-        trabajoRequerido = nil,
-        probabilidadFalla = 5 -- 5% de probabilidad de falla
-    }
-}
+-- 1. Las Recetas ahora se leen desde la tabla global 'Config.Recetas'
 
--- 2. Handler (Manejador) de la verificación de cocina (Llamado al abrir la barra)
-RegisterServerEvent('esx_cocinacasera:cocinarPlato')
-AddEventHandler('esx_cocinacasera:cocinarPlato', function(platoFinal, tiempo)
+-- 2. Handler de la verificación de cocina (Llamado al abrir la barra)
+ESX.RegisterServerCallback('esx_cocinacasera:cocinarPlato', function(source, cb, platoFinal, tiempo)
     local xPlayer = ESX.GetPlayerFromId(source)
     local job = xPlayer.job.name
+    local jobGrade = xPlayer.job.grade or 0
     
-    -- A. Validación: ¿Existe la receta?
-    if Recetas[platoFinal] then
-        local receta = Recetas[platoFinal]
+    if Config.Recetas[platoFinal] then
+        local receta = Config.Recetas[platoFinal]
 
-        -- Bloqueo por Trabajo
+        -- 2A. Bloqueo por Trabajo y Nivel
         if receta.trabajoRequerido and receta.trabajoRequerido ~= job then
             TriggerClientEvent('esx:showNotification', source, '¡~r~ERROR!~w~ No tienes el trabajo requerido para este plato.')
+            cb(false)
+            return
+        end
+        if jobGrade < receta.nivelRequerido then
+            TriggerClientEvent('esx:showNotification', source, '¡~r~ERROR!~w~ Tu nivel (' .. jobGrade .. ') es insuficiente (Req: ' .. receta.nivelRequerido .. ').')
+            cb(false)
             return
         end
         
         local puedeCocinar = true
         
-        -- B. Verificación de Ingredientes
+        -- 2B. Verificación de Ingredientes
         for _, ing in pairs(receta.ingredientes) do
             if xPlayer.getInventoryItem(ing.item).count < ing.cantidad then
                 puedeCocinar = false
@@ -55,54 +42,98 @@ AddEventHandler('esx_cocinacasera:cocinarPlato', function(platoFinal, tiempo)
             end
         end
 
-        -- C. Si puede cocinar, detenemos el script por el tiempo de la animación.
+        -- 2C. Si puede cocinar, se inicia el proceso.
         if puedeCocinar then
-            -- Devolvemos TRUE al callback del cliente, permitiendo que inicie la animación
-            -- La lógica de consumo y entrega se hace DESPUÉS del tiempo de espera.
+            -- Marcamos al jugador como "cocinando"
+            PlayersCooking[source] = true 
+            
+            -- Espera segura en el servidor.
             Citizen.Wait(tiempo) 
             
-            -- Devolvemos el control al cliente para que sepa que la espera terminó
-            -- El resultado TRUE indica que el proceso puede continuar.
-            return true 
+            cb(true) 
+            return
         else
-            -- Mensaje de Error (Faltan Ingredientes)
             TriggerClientEvent('esx:showNotification', source, '¡Te faltan ingredientes para cocinar ' .. receta.label .. '!')
-            return false
+            cb(false)
+            return
         end
 
     else
         print(('ERROR: Plato %s no encontrado en las recetas!'):format(platoFinal))
-        return false
+        cb(false)
+        return
     end
 end)
 
--- 3. Handler (Manejador) del procesamiento final (Llamado después de la animación)
+-- 3. Handler del procesamiento final (Llamado DESPUÉS de la animación)
 RegisterServerEvent('esx_cocinacasera:procesarCocina')
 AddEventHandler('esx_cocinacasera:procesarCocina', function(platoFinal)
     local xPlayer = ESX.GetPlayerFromId(source)
-    local receta = Recetas[platoFinal]
+    local jobGrade = xPlayer.job.grade or 0
+    local receta = Config.Recetas[platoFinal]
     
-    -- Lógica de Probabilidad de Falla
-    local rand = math.random(1, 100) -- Genera un número del 1 al 100
-    if rand <= receta.probabilidadFalla then
-        -- Falla: Solo se consumen los ingredientes, no se da el plato
-        for _, ing in pairs(receta.ingredientes) do
-            xPlayer.removeInventoryItem(ing.item, ing.cantidad)
-        end
-        TriggerClientEvent('esx:showNotification', source, '¡~r~FALLÓ!~w~ La receta se quemó o la arruinaste. ¡Mejor suerte la próxima!')
+    -- Control de Cancelación: Si el jugador ya canceló, salimos.
+    if not PlayersCooking[source] then
         return
     end
-
-    -- ÉXITO: Procesamiento de la Receta
     
-    -- 1. Consumir Ingredientes
+    -- CALCULAR PROBABILIDAD DE FALLA DINÁMICA
+    -- La falla es: baseFalla - (nivel_jugador * 5). Ejemplo: 50 - (3 * 5) = 35%
+    local FallaFinal = math.max(receta.baseFalla - (jobGrade * 5), 5) -- Mínimo 5% de falla
+    local rand = math.random(1, 100) 
+    
+    -- Procesamos la receta (quitar ingredientes) antes de dar el plato
     for _, ing in pairs(receta.ingredientes) do
         xPlayer.removeInventoryItem(ing.item, ing.cantidad)
     end
+    
+    if rand <= FallaFinal then
+        -- Falla
+        TriggerClientEvent('esx:showNotification', source, '¡~r~FALLÓ!~w~ La receta se quemó (Prob: ' .. FallaFinal .. '%)')
+    else
+        -- ÉXITO
+        xPlayer.addInventoryItem(platoFinal, 1)
+        TriggerClientEvent('esx:showNotification', source, 'Has cocinado con éxito: ' .. receta.label .. '!')
+    end
+    
+    -- Limpiamos el estado de cocinando
+    PlayersCooking[source] = nil
+end)
 
-    -- 2. Dar Plato Final al Jugador
-    xPlayer.addInventoryItem(platoFinal, 1)
+-- 4. Nuevo evento para manejar cancelaciones del cliente
+RegisterServerEvent('esx_cocinacasera:cancelarCocina')
+AddEventHandler('esx_cocinacasera:cancelarCocina', function()
+    -- Si el cliente cancela, simplemente quitamos el estado de "cocinando"
+    -- Esto evita que el plato se entregue después de la barra de progreso
+    PlayersCooking[source] = nil
+end)
 
-    -- 3. Mensaje de Éxito
-    TriggerClientEvent('esx:showNotification', source, 'Has cocinado con éxito: ' .. receta.label .. '!')
+-- 5. Handler para usar el ítem (Ahora también restaura Hambre/Sed)
+-- Se mantiene aquí porque se beneficia de la lógica del servidor (ESX.GetPlayerFromId)
+ESX.RegisterUsableItem('guisado', function(source)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    local receta = Config.Recetas['guisado']
+
+    xPlayer.removeInventoryItem('guisado', 1)
+
+    -- Aplicar efectos
+    TriggerClientEvent('esx_cocinacasera:restaurarSalud', source, receta.restoreHealth) 
+    xPlayer.setHunger(receta.restoreHunger) -- Restaurar hambre
+    xPlayer.setThirst(receta.restoreThirst) -- Restaurar sed
+    
+    TriggerClientEvent('esx:showNotification', source, '¡Te has comido el Guisado Casero y te sientes recuperado!')
+end)
+
+ESX.RegisterUsableItem('ensalada', function(source)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    local receta = Config.Recetas['ensalada']
+
+    xPlayer.removeInventoryItem('ensalada', 1)
+
+    -- Aplicar efectos
+    TriggerClientEvent('esx_cocinacasera:restaurarSalud', source, receta.restoreHealth) 
+    xPlayer.setHunger(receta.restoreHunger) -- Restaurar hambre
+    xPlayer.setThirst(receta.restoreThirst) -- Restaurar sed
+    
+    TriggerClientEvent('esx:showNotification', source, '¡Qué refrescante estaba esa Ensalada! Te sientes mejor.')
 end)
