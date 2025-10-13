@@ -1,12 +1,13 @@
 -- ====================================================================
--- MÓDULO 2: LADO DEL CLIENTE (client.lua) - FINAL (Multi-Cocina)
--- Ahora itera sobre múltiples localizaciones definidas en 'config.lua'.
+-- MÓDULO 2: LADO DEL CLIENTE (client.lua) - FINAL (Seguro y Animado)
+-- Añade: Bloqueo de menú Anti-Spam y Animaciones Condicionales.
 -- ====================================================================
 
 ESX = nil
 local PlayerData = {}
 local Cocinando = false
-local CocinaActual = nil -- Nuevo: para saber qué cocina estamos usando
+local CocinaActual = nil 
+local MenuAbierto = false -- ¡NUEVO! Variable de estado para el Anti-Spam del menú
 
 -- 1. Inicializar ESX y obtener datos del jugador
 Citizen.CreateThread(function()
@@ -35,23 +36,23 @@ Citizen.CreateThread(function()
         
         local coords = GetEntityCoords(PlayerPedId())
         local cercaDeCocina = false
+        local canInteract = not Cocinando and not MenuAbierto -- Nueva condición de interacción
         
-        -- Iterar sobre todas las cocinas
         for nombre, cocina in pairs(Config.Cocinas) do
             local dist = GetDistanceBetweenCoords(coords, cocina.pos, true)
             
             if dist <= cocina.radio then
                 cercaDeCocina = true
-                CocinaActual = nombre -- Establecer la cocina actual
+                CocinaActual = nombre 
                 
-                if not Cocinando then
+                if canInteract then
                     ESX.ShowHelpNotification("Presiona ~INPUT_CONTEXT~ para cocinar en " .. cocina.blipName .. ".")
 
                     if IsControlJustReleased(0, 51) then
                         AbrirMenuCocina()
                     end
                 end
-                break -- Salir del bucle una vez que encontramos una cocina
+                break 
             end
         end
 
@@ -85,9 +86,12 @@ end
 
 -- 4. Función para generar y mostrar el menú
 function AbrirMenuCocina()
+    if MenuAbierto then return end -- Bloqueo Anti-Spam
+    MenuAbierto = true
+    
     local elements = {}
     local job = PlayerData.job.name
-    local jobGrade = PlayerData.job.grade or 0 -- Usamos el grado para la progresión
+    local jobGrade = PlayerData.job.grade or 0 
 
     for platoFinal, data in pairs(Config.Recetas) do
         local ingredientesStr = {}
@@ -99,7 +103,6 @@ function AbrirMenuCocina()
         local label = data.label .. ' (' .. table.concat(ingredientesStr, ', ') .. ')'
         local color = '#ffffff'
 
-        -- Lógica para el trabajo y nivel requeridos (UX)
         if data.trabajoRequerido and data.trabajoRequerido ~= job then
             label = '~r~ [PRO] ' .. label 
             color = '#ff4444'
@@ -126,6 +129,7 @@ function AbrirMenuCocina()
         },
         function(data, menu)
             menu.close()
+            MenuAbierto = false -- Cerrar menú
             
             local platoSeleccionado = data.current.value
             local receta = Config.Recetas[platoSeleccionado]
@@ -145,6 +149,7 @@ function AbrirMenuCocina()
         end,
         function(data, menu)
             menu.close()
+            MenuAbierto = false -- Cancelar menú
         end
     )
 end
@@ -153,20 +158,18 @@ end
 function ProcessoCocina(plato, tiempo)
     Cocinando = true
     
-    -- El servidor ya tiene la receta y el tiempo gracias a 'config.lua'
     ESX.TriggerServerCallback('esx_cocinacasera:cocinarPlato', function(resultado)
-        if resultado then
-            -- Éxito en la verificación de ingredientes/trabajo.
-        else
+        if not resultado then
             Cocinando = false
             ClearPedTasks(PlayerPedId())
         end
     end, plato, tiempo)
     
-    -- Tareas visuales del cliente
+    -- Tareas visuales del cliente (Animación Condicional)
     local ped = PlayerPedId()
-    local dict = "amb@prop_human_bbq@male@idle_a"
-    local anim = "idle_b"
+    local receta = Config.Recetas[plato]
+    local dict = receta.animDict
+    local anim = receta.animName
     
     RequestAnimDict(dict)
     while not HasAnimDictLoaded(dict) do
@@ -177,7 +180,7 @@ function ProcessoCocina(plato, tiempo)
     
     ESX.Progressbar(
         'cocinando',
-        'Cocinando ' .. Config.Recetas[plato].label .. '...',
+        'Cocinando ' .. receta.label .. '...',
         tiempo,
         false, 
         false, 
@@ -185,14 +188,12 @@ function ProcessoCocina(plato, tiempo)
         function() -- Al completar la barra
             Cocinando = false
             ClearPedTasks(PlayerPedId())
-            -- Llamar al evento final de procesamiento
             TriggerServerEvent('esx_cocinacasera:procesarCocina', plato)
         end,
         function(cancelled) 
             if cancelled then
                 Cocinando = false
                 ClearPedTasks(PlayerPedId())
-                -- Si se cancela, debemos informar al servidor para evitar que dé el plato
                 TriggerServerEvent('esx_cocinacasera:cancelarCocina')
                 ESX.ShowNotification('~r~Cocina cancelada.')
             end
@@ -203,5 +204,5 @@ end
 -- 6. Nuevo evento para que el servidor sepa si se canceló
 RegisterNetEvent('esx_cocinacasera:cancelarCocina')
 AddEventHandler('esx_cocinacasera:cancelarCocina', function()
-    -- No necesitamos hacer nada aquí, solo sirve como un ping al servidor.
+    -- Solo sirve como ping al servidor.
 end)
