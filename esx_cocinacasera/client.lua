@@ -1,174 +1,88 @@
 -- ====================================================================
--- MÓDULO 2: LADO DEL CLIENTE (client.lua) - FINAL (Refactorizado)
+-- MÓDULO 3: LADO DEL SERVIDOR (server.lua) - FINAL (Refactorizado)
 -- Ahora lee toda la información desde el archivo 'config.lua'.
 -- ====================================================================
 
 ESX = nil
-local PlayerData = {}
-local Cocinando = false
 
--- 1. Las Recetas y Coordenadas ahora se leen desde la tabla global 'Config'
+TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
 
--- 2. Inicializar ESX y obtener datos del jugador
-Citizen.CreateThread(function()
-    while ESX == nil do
-        TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
-        Citizen.Wait(100)
-    end
-    while ESX.GetPlayerData().job == nil do 
-        Citizen.Wait(10)
-    end
-    PlayerData = ESX.GetPlayerData()
+-- 1. Las Recetas ahora se leen desde la tabla global 'Config.Recetas'
+
+-- 2. Handler (Manejador) de la verificación de cocina (Llamado al abrir la barra)
+ESX.RegisterServerCallback('esx_cocinacasera:cocinarPlato', function(source, cb, platoFinal, tiempo)
+    local xPlayer = ESX.GetPlayerFromId(source)
+    local job = xPlayer.job.name
     
-    RegisterNetEvent('esx:setPlayerData')
-    AddEventHandler('esx:setPlayerData', function(ndata)
-        PlayerData = ndata
-    end)
+    -- A. Validación: ¿Existe la receta?
+    if Config.Recetas[platoFinal] then
+        local receta = Config.Recetas[platoFinal]
 
-    -- Iniciar el Blip de la Cocina usando la configuración
-    AddCocinaBlip()
-end)
-
--- 3. Bucle principal: Detección de Zona y Menú
-Citizen.CreateThread(function()
-    while true do
-        Citizen.Wait(0)
+        -- Bloqueo por Trabajo
+        if receta.trabajoRequerido and receta.trabajoRequerido ~= job then
+            TriggerClientEvent('esx:showNotification', source, '¡~r~ERROR!~w~ No tienes el trabajo requerido para este plato.')
+            cb(false)
+            return
+        end
         
-        local coords = GetEntityCoords(PlayerPedId())
-        local dist = GetDistanceBetweenCoords(coords, Config.CocinaTest.pos, true)
+        local puedeCocinar = true
         
-        if dist <= Config.CocinaTest.radio and not Cocinando then
-            ESX.ShowHelpNotification("Presiona ~INPUT_CONTEXT~ para cocinar.")
-
-            if IsControlJustReleased(0, 51) then
-                AbrirMenuCocina()
+        -- B. Verificación de Ingredientes
+        for _, ing in pairs(receta.ingredientes) do
+            if xPlayer.getInventoryItem(ing.item).count < ing.cantidad then
+                puedeCocinar = false
+                break
             end
-        elseif dist > Config.CocinaTest.radio then
-            Citizen.Wait(500)
-        end
-        
-        if Cocinando then
-            DisableAllControlActions(0)
-        end
-    end
-end)
-
--- 4. Añadir Blip al mapa
-function AddCocinaBlip()
-    local blip = AddBlipForCoord(Config.CocinaTest.pos.x, Config.CocinaTest.pos.y, Config.CocinaTest.pos.z)
-    
-    SetBlipSprite (blip, Config.CocinaTest.blipSprite)
-    SetBlipDisplay(blip, 4)
-    SetBlipScale  (blip, 0.8)
-    SetBlipColour (blip, Config.CocinaTest.blipColor)
-    SetBlipAsShortRange(blip, true)
-    BeginTextCommandSetBlipName("STRING")
-    AddTextComponentSubstringPlayerName(Config.CocinaTest.blipName)
-    EndTextCommandSetBlipName(blip)
-end
-
-
--- 5. Función para generar y mostrar el menú
-function AbrirMenuCocina()
-    local elements = {}
-    local job = PlayerData.job.name
-
-    -- Iteramos sobre la Configuración
-    for platoFinal, data in pairs(Config.Recetas) do
-        local ingredientesStr = {}
-        for _, ing in pairs(data.ingredientes) do
-            local itemLabel = ESX.GetItemLabel(ing.item) or ing.item 
-            table.insert(ingredientesStr, ing.cantidad .. 'x ' .. itemLabel)
-        end
-        
-        local label = data.label .. ' (' .. table.concat(ingredientesStr, ', ') .. ')'
-        local color = '#ffffff'
-
-        -- Lógica para el trabajo requerido (UX)
-        if data.trabajoRequerido and data.trabajoRequerido ~= job then
-            label = '~r~ [PRO] ' .. label 
-            color = '#ff4444'
         end
 
-        table.insert(elements, {
-            label = label,
-            value = platoFinal,
-            jobRequired = data.trabajoRequerido,
-            font_color = color
-        })
-    end
-
-    ESX.UI.Menu.Open(
-        'default', GetCurrentResourceName(), 'cocina_menu',
-        {
-            title    = 'Cocina Casera',
-            align    = 'right',
-            elements = elements
-        },
-        function(data, menu)
-            menu.close()
-            
-            local platoSeleccionado = data.current.value
-            local receta = Config.Recetas[platoSeleccionado]
-            
-            if receta.trabajoRequerido and receta.trabajoRequerido ~= PlayerData.job.name then
-                ESX.ShowNotification('~r~No tienes la experiencia necesaria para cocinar este plato.')
-                return
-            end
-
-            ProcessoCocina(platoSeleccionado, receta.tiempo)
-
-        end,
-        function(data, menu)
-            menu.close()
-        end
-    )
-end
-
--- 6. Función para la animación y barra de progreso
-function ProcessoCocina(plato, tiempo)
-    Cocinando = true
-    
-    -- El servidor ya tiene la receta y el tiempo gracias a 'config.lua'
-    ESX.TriggerServerCallback('esx_cocinacasera:cocinarPlato', function(resultado)
-        if resultado then
-            -- El tiempo y el proceso de verificación de ingredientes en el servidor terminaron.
-            -- El resultado final (éxito/falla) se maneja en 'esx_cocinacasera:procesarCocina'
+        -- C. Si puede cocinar, detenemos el script por el tiempo de la animación.
+        if puedeCocinar then
+            Citizen.Wait(tiempo) 
+            cb(true) 
+            return
         else
-            Cocinando = false
-            ClearPedTasks(PlayerPedId())
+            -- Mensaje de Error (Faltan Ingredientes)
+            TriggerClientEvent('esx:showNotification', source, '¡Te faltan ingredientes para cocinar ' .. receta.label .. '!')
+            cb(false)
+            return
         end
-    end, plato, tiempo)
-    
-    -- Tareas visuales del cliente
-    local ped = PlayerPedId()
-    local dict = "amb@prop_human_bbq@male@idle_a"
-    local anim = "idle_b"
-    
-    RequestAnimDict(dict)
-    while not HasAnimDictLoaded(dict) do
-        Citizen.Wait(100)
+
+    else
+        print(('ERROR: Plato %s no encontrado en las recetas!'):format(platoFinal))
+        cb(false)
+        return
     end
+end)
+
+-- 3. Handler (Manejador) del procesamiento final (Llamado después de la animación)
+RegisterServerEvent('esx_cocinacasera:procesarCocina')
+AddEventHandler('esx_cocinacasera:procesarCocina', function(platoFinal)
+    local xPlayer = ESX.GetPlayerFromId(source)
     
-    TaskPlayAnim(ped, dict, anim, 8.0, -8.0, tiempo, 1, 0, false, false, false)
+    -- Usamos la configuración centralizada
+    local receta = Config.Recetas[platoFinal]
     
-    ESX.Progressbar(
-        'cocinando',
-        'Cocinando ' .. Config.Recetas[plato].label .. '...',
-        tiempo,
-        false, 
-        false, 
-        {},
-        function() -- Al completar la barra
-            Cocinando = false
-            ClearPedTasks(PlayerPedId())
-        end,
-        function(cancelled) 
-            if cancelled then
-                Cocinando = false
-                ClearPedTasks(PlayerPedId())
-                ESX.ShowNotification('~r~Cocina cancelada.')
-            end
+    -- Lógica de Probabilidad de Falla
+    local rand = math.random(1, 100) 
+    if rand <= receta.probabilidadFalla then
+        -- Falla: Solo se consumen los ingredientes, no se da el plato
+        for _, ing in pairs(receta.ingredientes) do
+            xPlayer.removeInventoryItem(ing.item, ing.cantidad)
         end
-    )
-end
+        TriggerClientEvent('esx:showNotification', source, '¡~r~FALLÓ!~w~ La receta se quemó o la arruinaste. ¡Mejor suerte la próxima!')
+        return
+    end
+
+    -- ÉXITO: Procesamiento de la Receta
+    
+    -- 1. Consumir Ingredientes
+    for _, ing in pairs(receta.ingredientes) do
+        xPlayer.removeInventoryItem(ing.item, ing.cantidad)
+    end
+
+    -- 2. Dar Plato Final al Jugador
+    xPlayer.addInventoryItem(platoFinal, 1)
+
+    -- 3. Mensaje de Éxito
+    TriggerClientEvent('esx:showNotification', source, 'Has cocinado con éxito: ' .. receta.label .. '!')
+end)
