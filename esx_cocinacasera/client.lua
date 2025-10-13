@@ -1,3 +1,8 @@
+-- ====================================================================
+-- MÓDULO 2: LADO DEL CLIENTE (client.lua)
+-- (Revisado y Completo)
+-- ====================================================================
+
 ESX = nil
 local PlayerData = {}
 
@@ -108,4 +113,3 @@ function AbrirMenuCocina()
         end
     )
 end
-
