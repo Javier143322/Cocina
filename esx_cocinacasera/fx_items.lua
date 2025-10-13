@@ -20,4 +20,4 @@ AddEventHandler('esx_cocinacasera:restaurarSalud', function(cantidad)
     SetEntityHealth(playerPed, newHealth)
 end)
 
--- NOTA: ESX.RegisterUsableItem se movió a server.lua para centralizar la lógica de ítems.
+-- NOTA: ESX.RegisterUsableItem se maneja ahora de forma universal en server.lua
