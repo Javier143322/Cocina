@@ -1,3 +1,8 @@
+-- ====================================================================
+-- MÓDULO 4: ACTUALIZACIÓN DE MANIFIESTO (fxmanifest.lua)
+-- Añade la carga del nuevo archivo de lógica de ítems.
+-- ====================================================================
+
 fx_version 'cerulean'
 games { 'gta5' }
 
@@ -11,11 +16,12 @@ dependencies {
 
 client_scripts {
     '@es_extended/config.lua',
-    'client.lua' -- Aquí estará la lógica de interacción y menú
+    'client.lua',
+    'fx_items.lua' -- ¡NUEVO ARCHIVO A CARGAR!
 }
 
 server_scripts {
     '@es_extended/config.lua',
-    'server.lua' -- Aquí estará la lógica de inventario y seguridad
+    'server.lua',
+    'fx_items.lua' -- ¡NUEVO ARCHIVO A CARGAR!
 }
-
