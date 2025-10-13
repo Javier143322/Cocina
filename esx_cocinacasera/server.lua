@@ -1,3 +1,7 @@
+-- ====================================================================
+-- MÓDULO 3: LADO DEL SERVIDOR (server.lua)
+-- Lógica de Inventario, Seguridad y Transacciones (Revisado y Completo)
+-- ====================================================================
 
 ESX = nil
 
