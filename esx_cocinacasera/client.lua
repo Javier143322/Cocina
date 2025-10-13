@@ -1,42 +1,15 @@
 -- ====================================================================
--- MÓDULO 2: LADO DEL CLIENTE (client.lua) - FINAL
--- Añade: Blip en el mapa y Animación/Barra de Progreso Inmersiva.
+-- MÓDULO 2: LADO DEL CLIENTE (client.lua) - FINAL (Refactorizado)
+-- Ahora lee toda la información desde el archivo 'config.lua'.
 -- ====================================================================
 
 ESX = nil
 local PlayerData = {}
-local Cocinando = false -- Nuevo estado para evitar que el jugador se mueva mientras cocina
+local Cocinando = false
 
--- 1. Definición de Recetas (Debe coincidir con la lógica del Servidor)
-local Recetas = {
-    ['guisado'] = { 
-        label = 'Guisado Casero',
-        ingredientes = {
-            { item = 'carne', cantidad = 2 },
-            { item = 'vegetales', cantidad = 1 },
-            { item = 'sal', cantidad = 1 }
-        },
-        tiempo = 8000, -- 8 segundos de cocción
-        trabajoRequerido = 'chef' -- Solo chefs pueden hacer guisado
-    },
-    ['ensalada'] = {
-        label = 'Ensalada Refrescante',
-        ingredientes = {
-            { item = 'vegetales', cantidad = 3 }
-        },
-        tiempo = 3000, -- 3 segundos de cocción
-        trabajoRequerido = nil -- Cualquiera puede hacer ensalada
-    }
-}
+-- 1. Las Recetas y Coordenadas ahora se leen desde la tabla global 'Config'
 
--- 2. Ubicación de Prueba de la Cocina
-local CocinaTest = {
-    pos = vector3(-810.0, 175.0, 78.0), -- Coordenadas de ejemplo (ajusta a tu gusto)
-    radio = 1.5, -- Distancia máxima para interactuar
-    blipId = 0
-}
-
--- 3. Inicializar ESX y obtener datos del jugador
+-- 2. Inicializar ESX y obtener datos del jugador
 Citizen.CreateThread(function()
     while ESX == nil do
         TriggerEvent('esx:getSharedObject', function(obj) ESX = obj end)
@@ -47,65 +20,61 @@ Citizen.CreateThread(function()
     end
     PlayerData = ESX.GetPlayerData()
     
-    -- Listener para actualizar los datos del jugador (ej: cambio de trabajo)
     RegisterNetEvent('esx:setPlayerData')
     AddEventHandler('esx:setPlayerData', function(ndata)
         PlayerData = ndata
     end)
 
-    -- Iniciar el Blip de la Cocina
+    -- Iniciar el Blip de la Cocina usando la configuración
     AddCocinaBlip()
 end)
 
--- 4. Bucle principal: Detección de Zona y Menú
+-- 3. Bucle principal: Detección de Zona y Menú
 Citizen.CreateThread(function()
     while true do
         Citizen.Wait(0)
         
         local coords = GetEntityCoords(PlayerPedId())
-        local dist = GetDistanceBetweenCoords(coords, CocinaTest.pos, true)
+        local dist = GetDistanceBetweenCoords(coords, Config.CocinaTest.pos, true)
         
-        -- Si el jugador está cerca de la zona de cocina Y no está cocinando
-        if dist <= CocinaTest.radio and not Cocinando then
+        if dist <= Config.CocinaTest.radio and not Cocinando then
             ESX.ShowHelpNotification("Presiona ~INPUT_CONTEXT~ para cocinar.")
 
             if IsControlJustReleased(0, 51) then
                 AbrirMenuCocina()
             end
-        elseif dist > CocinaTest.radio then
+        elseif dist > Config.CocinaTest.radio then
             Citizen.Wait(500)
         end
         
-        -- Evita que el jugador se mueva si está en proceso de cocción
         if Cocinando then
             DisableAllControlActions(0)
         end
     end
 end)
 
--- 5. Añadir Blip al mapa
+-- 4. Añadir Blip al mapa
 function AddCocinaBlip()
-    local blip = AddBlipForCoord(CocinaTest.pos.x, CocinaTest.pos.y, CocinaTest.pos.z)
+    local blip = AddBlipForCoord(Config.CocinaTest.pos.x, Config.CocinaTest.pos.y, Config.CocinaTest.pos.z)
     
-    SetBlipSprite (blip, 374) -- Icono de cubiertos/restaurante
+    SetBlipSprite (blip, Config.CocinaTest.blipSprite)
     SetBlipDisplay(blip, 4)
     SetBlipScale  (blip, 0.8)
-    SetBlipColour (blip, 2) -- Color verde
+    SetBlipColour (blip, Config.CocinaTest.blipColor)
     SetBlipAsShortRange(blip, true)
     BeginTextCommandSetBlipName("STRING")
-    AddTextComponentSubstringPlayerName("Cocina Principal")
+    AddTextComponentSubstringPlayerName(Config.CocinaTest.blipName)
     EndTextCommandSetBlipName(blip)
-    
-    CocinaTest.blipId = blip
 end
 
 
--- 6. Función para generar y mostrar el menú
+-- 5. Función para generar y mostrar el menú
 function AbrirMenuCocina()
     local elements = {}
-    local job = PlayerData.job.name -- Obtiene el trabajo actual
+    local job = PlayerData.job.name
 
-    for platoFinal, data in pairs(Recetas) do
+    -- Iteramos sobre la Configuración
+    for platoFinal, data in pairs(Config.Recetas) do
         local ingredientesStr = {}
         for _, ing in pairs(data.ingredientes) do
             local itemLabel = ESX.GetItemLabel(ing.item) or ing.item 
@@ -113,15 +82,14 @@ function AbrirMenuCocina()
         end
         
         local label = data.label .. ' (' .. table.concat(ingredientesStr, ', ') .. ')'
-        local color = '#ffffff' -- Por defecto
+        local color = '#ffffff'
 
-        -- Lógica para el trabajo requerido
+        -- Lógica para el trabajo requerido (UX)
         if data.trabajoRequerido and data.trabajoRequerido ~= job then
-            label = '~r~ [PRO] ' .. label -- Añadir indicador si está bloqueado
+            label = '~r~ [PRO] ' .. label 
             color = '#ff4444'
         end
 
-        -- Añadir el elemento al menú
         table.insert(elements, {
             label = label,
             value = platoFinal,
@@ -141,15 +109,13 @@ function AbrirMenuCocina()
             menu.close()
             
             local platoSeleccionado = data.current.value
-            local receta = Recetas[platoSeleccionado]
+            local receta = Config.Recetas[platoSeleccionado]
             
-            -- Bloqueo por Trabajo (lado cliente para UX)
             if receta.trabajoRequerido and receta.trabajoRequerido ~= PlayerData.job.name then
                 ESX.ShowNotification('~r~No tienes la experiencia necesaria para cocinar este plato.')
                 return
             end
 
-            -- Iniciar la Animación y el Proceso
             ProcessoCocina(platoSeleccionado, receta.tiempo)
 
         end,
@@ -159,24 +125,24 @@ function AbrirMenuCocina()
     )
 end
 
--- 7. Función para la animación y barra de progreso
+-- 6. Función para la animación y barra de progreso
 function ProcessoCocina(plato, tiempo)
-    -- Inicia la animación de "cocinar"
     Cocinando = true
+    
+    -- El servidor ya tiene la receta y el tiempo gracias a 'config.lua'
     ESX.TriggerServerCallback('esx_cocinacasera:cocinarPlato', function(resultado)
-        Cocinando = false
-        ClearPedTasks(PlayerPedId()) -- Detiene la animación
-        
         if resultado then
-            -- Solo si el servidor devuelve TRUE (ingredientes correctos)
-            -- Disparar el evento al Servidor para el procesamiento FINAL (quitar ingredientes y dar ítem)
-            TriggerServerEvent('esx_cocinacasera:procesarCocina', plato)
+            -- El tiempo y el proceso de verificación de ingredientes en el servidor terminaron.
+            -- El resultado final (éxito/falla) se maneja en 'esx_cocinacasera:procesarCocina'
+        else
+            Cocinando = false
+            ClearPedTasks(PlayerPedId())
         end
-    end, plato, tiempo) -- Enviamos el plato y el tiempo al servidor
+    end, plato, tiempo)
     
     -- Tareas visuales del cliente
     local ped = PlayerPedId()
-    local dict = "amb@prop_human_bbq@male@idle_a" -- Diccionario de animación de barbacoa/cocina
+    local dict = "amb@prop_human_bbq@male@idle_a"
     local anim = "idle_b"
     
     RequestAnimDict(dict)
@@ -184,22 +150,20 @@ function ProcessoCocina(plato, tiempo)
         Citizen.Wait(100)
     end
     
-    -- Ejecuta la animación
     TaskPlayAnim(ped, dict, anim, 8.0, -8.0, tiempo, 1, 0, false, false, false)
     
-    -- Muestra la barra de progreso
     ESX.Progressbar(
         'cocinando',
-        'Cocinando ' .. Recetas[plato].label .. '...',
+        'Cocinando ' .. Config.Recetas[plato].label .. '...',
         tiempo,
-        false, -- No se puede cancelar
-        false, -- No se puede usar el vehículo
+        false, 
+        false, 
         {},
-        nil,
         function() -- Al completar la barra
-            -- NOTA: El resultado final lo maneja el Callback del servidor, no la barra.
+            Cocinando = false
+            ClearPedTasks(PlayerPedId())
         end,
-        function(cancelled) -- Al cancelar la barra (no aplica en este caso)
+        function(cancelled) 
             if cancelled then
                 Cocinando = false
                 ClearPedTasks(PlayerPedId())
