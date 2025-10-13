@@ -1,6 +1,7 @@
 -- ====================================================================
 -- MÓDULO 4: LÓGICA DE CONSUMO (fx_items.lua)
 -- Define qué hace la comida al ser USADA desde el inventario.
+-- (Sin cambios, se mantiene la versión original)
 -- ====================================================================
 
 ESX = nil
