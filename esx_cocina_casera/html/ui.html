@@ -1,1 +1,89 @@
 
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cocina Casera</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- PANEL PRINCIPAL DE EXPERIENCIA -->
+    <div id="experience-panel" class="panel">
+        <div class="level-display">
+            <div class="level-circle">
+                <span id="current-level">1</span>
+            </div>
+            <div class="exp-bar-container">
+                <div class="exp-bar" id="exp-bar"></div>
+                <div class="exp-text" id="exp-text">0/100 XP</div>
+            </div>
+        </div>
+        <div class="player-title" id="player-title">🍳 Aprendiz</div>
+    </div>
+
+    <!-- MENÚ DE COCINA -->
+    <div id="cooking-menu" class="menu hidden">
+        <div class="menu-header">
+            <h2>🍳 COCINA CASERA</h2>
+            <button class="close-btn" onclick="closeCookingMenu()">×</button>
+        </div>
+        
+        <div class="menu-content">
+            <div class="recipe-categories">
+                <button class="category-btn active" data-category="all">Todas</button>
+                <button class="category-btn" data-category="principal">Platos Principales</button>
+                <button class="category-btn" data-category="ensalada">Ensaladas</button>
+                <button class="category-btn" data-category="postre">Postres</button>
+                <button class="category-btn" data-category="bebida">Bebidas</button>
+            </div>
+
+            <div class="recipes-list" id="recipes-list">
+                <!-- Las recetas se cargan dinámicamente -->
+            </div>
+        </div>
+    </div>
+
+    <!-- PANEL DE ESTADÍSTICAS -->
+    <div id="stats-panel" class="panel stats-panel hidden">
+        <div class="stats-header">
+            <h3>📊 ESTADÍSTICAS</h3>
+            <button class="close-btn" onclick="closeStats()">×</button>
+        </div>
+        <div class="stats-content">
+            <div class="stat-item">
+                <span class="stat-label">Recetas Cocinadas:</span>
+                <span class="stat-value" id="stat-recipes">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Porcentaje Éxito:</span>
+                <span class="stat-value" id="stat-success">0%</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Nivel Chef:</span>
+                <span class="stat-value" id="stat-level">1</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Ranking:</span>
+                <span class="stat-value" id="stat-ranking">#0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MENÚ DE HABILIDADES -->
+    <div id="skills-menu" class="menu hidden">
+        <div class="menu-header">
+            <h2>🔓 HABILIDADES</h2>
+            <button class="close-btn" onclick="closeSkillsMenu()">×</button>
+        </div>
+        <div class="skills-content" id="skills-content">
+            <!-- Habilidades se cargan dinámicamente -->
+        </div>
+    </div>
+
+    <!-- NOTIFICACIONES -->
+    <div id="notifications-container"></div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
