@@ -17,34 +17,34 @@ dependencies {
 -- CONFIGURACIÓN COMPARTIDA
 -- ====================================================================
 shared_scripts {
-    'config.lua'                    -- Configuración principal
+    'config.lua'
 }
 
 -- ====================================================================
 -- SCRIPTS DEL CLIENTE
 -- ====================================================================
 client_scripts {
-    'client.lua',                   -- Cliente principal (EXISTENTE)
-    'fx_items.lua',                 -- Sistema de consumo (EXISTENTE)
-    'stats.lua',                    -- NUEVO: Estadísticas
-    'missions.lua',                 -- NUEVO: Misiones
-    'market.lua',                   -- NUEVO: Mercado
-    'experience.lua'                -- NUEVO: Experiencia avanzada
+    'client/client.lua',
+    'client/fx_items.lua',
+    'modules/stats.lua',
+    'modules/missions.lua', 
+    'modules/market.lua',
+    'modules/experience.lua'
 }
 
 -- ====================================================================
--- SCRIPTS DEL SERVIDOR
+-- SCRIPTS DEL SERVIDOR  
 -- ====================================================================
 server_scripts {
-    'server.lua',                   -- Servidor principal (EXISTENTE)
-    'stats.lua',                    -- NUEVO: Estadísticas
-    'missions.lua',                 -- NUEVO: Misiones  
-    'market.lua',                   -- NUEVO: Mercado
-    'experience.lua'                -- NUEVO: Experiencia avanzada
+    'server/server.lua',
+    'modules/stats.lua',
+    'modules/missions.lua',
+    'modules/market.lua',
+    'modules/experience.lua'
 }
 
 -- ====================================================================
--- INTERFAZ DE USUARIO (NUEVO)
+-- INTERFAZ DE USUARIO
 -- ====================================================================
 ui_page 'html/ui.html'
 
@@ -61,21 +61,18 @@ files {
 -- ====================================================================
 exports {
     'CanPlayerCook',
-    'GetPlayerRecipes', 
-    'StartCookingProcess',
-    'GetCookingStats',              -- NUEVA EXPORT
-    'GetActiveMissions'             -- NUEVA EXPORT
+    'GetPlayerRecipes',
+    'StartCookingProcess', 
+    'GetCookingStats',
+    'GetActiveMissions'
 }
 
 server_exports {
     'RegisterNewRecipe',
     'GetCookingStats',
     'ValidateIngredients',
-    'GetMarketPrices',              -- NUEVA EXPORT
-    'GetPlayerExperience'           -- NUEVA EXPORT
+    'GetMarketPrices',
+    'GetPlayerExperience'
 }
 
--- ====================================================================
--- COMPATIBILIDAD
--- ====================================================================
 lua54 'yes'
