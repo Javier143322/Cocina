@@ -1,5 +1,5 @@
 // ====================================================================
-// SISTEMA DE INTERFAZ - COCINA CASERA
+// SISTEMA DE INTERFAZ - COCINA CASERA (VERSIÓN CORREGIDA)
 // ====================================================================
 
 class CocinaUI {
@@ -19,14 +19,11 @@ class CocinaUI {
     }
 
     // ====================================================================
-    // 1. INICIALIZACIÓN DEL SISTEMA
+    // 1. INICIALIZACIÓN MEJORADA
     // ====================================================================
 
     initialize() {
         console.log('🍳 Inicializando interfaz de Cocina Casera...');
-        
-        // Cargar datos iniciales
-        this.loadPlayerData();
         
         // Configurar event listeners
         this.setupEventListeners();
@@ -94,12 +91,17 @@ class CocinaUI {
                 case 'closeAllMenus':
                     this.closeAllMenus();
                     break;
+
+                // NUEVO: Actualizar datos del jugador
+                case 'updatePlayerData':
+                    this.updatePlayerData(data.playerData);
+                    break;
             }
         });
     }
 
     // ====================================================================
-    // 2. SISTEMA DE EXPERIENCIA Y NIVELES
+    // 2. SISTEMA DE EXPERIENCIA CORREGIDO
     // ====================================================================
 
     updateExperience(data) {
@@ -109,15 +111,28 @@ class CocinaUI {
         document.getElementById('current-level').textContent = this.playerData.level;
         document.getElementById('player-title').textContent = this.getTitleForLevel(this.playerData.level);
         
-        // Calcular porcentaje de experiencia
-        const expPercent = (this.playerData.experience_actual / this.playerData.experiencia_siguiente_nivel) * 100;
+        // CORRECCIÓN: Usar nombres de propiedades consistentes
+        const expActual = data.experience_actual || data.experience || 0;
+        const expSiguiente = data.experiencia_siguiente_nivel || data.expRequired || 100;
+        
+        const expPercent = (expActual / expSiguiente) * 100;
         document.getElementById('exp-bar').style.width = expPercent + '%';
         document.getElementById('exp-text').textContent = 
-            `${this.playerData.experience_actual}/${this.playerData.experiencia_siguiente_nivel} XP`;
+            `${expActual}/${expSiguiente} XP`;
         
         // Efecto de nivel up
         if (data.levelUp) {
             this.playLevelUpAnimation();
+        }
+    }
+
+    updatePlayerData(playerData) {
+        // Actualizar datos generales del jugador
+        if (playerData.experience) {
+            this.updateExperience(playerData.experience);
+        }
+        if (playerData.stats) {
+            this.updateStats(playerData.stats);
         }
     }
 
@@ -133,14 +148,12 @@ class CocinaUI {
             100: "👑 Dios de la Cocina"
         };
         
-        // Encontrar el título más alto para el nivel actual
         let highestTitle = "🍳 Aprendiz";
         for (const [lvl, title] of Object.entries(titles)) {
             if (level >= parseInt(lvl)) {
                 highestTitle = title;
             }
         }
-        
         return highestTitle;
     }
 
@@ -148,7 +161,6 @@ class CocinaUI {
         const levelCircle = document.querySelector('.level-circle');
         levelCircle.classList.add('level-up');
         
-        // Mostrar notificación especial
         this.showNotification(`🎉 ¡NIVEL ${this.playerData.level} ALCANZADO!`, 'success');
         
         setTimeout(() => {
@@ -157,7 +169,7 @@ class CocinaUI {
     }
 
     // ====================================================================
-    // 3. SISTEMA DE MENÚ DE COCINA
+    // 3. SISTEMA DE COCINA MEJORADO
     // ====================================================================
 
     showCookingMenu(recipesData) {
@@ -167,13 +179,8 @@ class CocinaUI {
         const menu = document.getElementById('cooking-menu');
         const recipesList = document.getElementById('recipes-list');
         
-        // Mostrar menú
         menu.classList.remove('hidden');
-        
-        // Generar lista de recetas
         recipesList.innerHTML = this.generateRecipesList(recipesData);
-        
-        // Configurar filtros de categoría
         this.setupCategoryFilters();
     }
 
@@ -181,23 +188,26 @@ class CocinaUI {
         let html = '';
         
         for (const [recipeKey, recipe] of Object.entries(recipes)) {
-            const difficultyClass = `difficulty-${recipe.dificultad}`;
-            const isPro = recipe.trabajoRequerido !== null;
+            // CORRECCIÓN: Usar propiedades de tu config.lua
+            const difficulty = recipe.dificultad || 'media';
+            const difficultyClass = `difficulty-${difficulty}`;
+            const isPro = recipe.trabajoRequerido !== null && recipe.trabajoRequerido !== undefined;
             const proClass = isPro ? 'pro' : '';
+            const category = recipe.category || 'principal';
             
             html += `
-                <div class="recipe-item ${proClass}" data-recipe="${recipeKey}" data-category="${recipe.category}">
+                <div class="recipe-item ${proClass}" data-recipe="${recipeKey}" data-category="${category}">
                     <div class="recipe-header">
                         <div class="recipe-name">${recipe.label}</div>
                         <div class="recipe-difficulty ${difficultyClass}">
-                            ${recipe.dificultad.toUpperCase()}
+                            ${difficulty.toUpperCase()}
                         </div>
                     </div>
                     <div class="recipe-ingredients">
                         ${this.formatIngredients(recipe.ingredientes)}
                     </div>
                     <div class="recipe-time">
-                        ⏱️ ${recipe.tiempo / 1000} segundos
+                        ⏱️ ${(recipe.tiempo || 10000) / 1000} segundos
                     </div>
                     ${isPro ? '<div class="recipe-badge">👨‍🍳 PRO</div>' : ''}
                 </div>
@@ -208,13 +218,16 @@ class CocinaUI {
     }
 
     formatIngredients(ingredients) {
-        return ingredients.map(ing => 
-            `${ing.cantidad}x ${this.getItemLabel(ing.item)}`
-        ).join(', ');
+        if (!ingredients) return 'Ingredientes no definidos';
+        
+        return ingredients.map(ing => {
+            const cantidad = ing.cantidad || 1;
+            const item = ing.item || 'ingrediente';
+            return `${cantidad}x ${this.getItemLabel(item)}`;
+        }).join(', ');
     }
 
     getItemLabel(itemName) {
-        // Aquí integrarías con la configuración de items
         const itemLabels = {
             'carne': '🥩 Carne',
             'vegetales': '🥕 Vegetales', 
@@ -240,17 +253,12 @@ class CocinaUI {
         
         categoryBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                // Remover activo de todos los botones
                 categoryBtns.forEach(b => b.classList.remove('active'));
-                // Activar botón clickeado
                 btn.classList.add('active');
-                
-                // Filtrar recetas
                 this.filterRecipesByCategory(btn.dataset.category);
             });
         });
         
-        // Configurar click en recetas
         document.querySelectorAll('.recipe-item').forEach(item => {
             item.addEventListener('click', () => {
                 this.selectRecipe(item.dataset.recipe);
@@ -271,8 +279,13 @@ class CocinaUI {
     }
 
     selectRecipe(recipeKey) {
-        // Enviar al cliente de FiveM para iniciar cocina
-        fetch(`https://${GetParentResourceName()}/startCooking`, {
+        if (!this.recipes[recipeKey]) {
+            this.showNotification('❌ Receta no disponible', 'error');
+            return;
+        }
+
+        // CORRECCIÓN: Usar el nombre correcto del recurso
+        fetch(`https://esx_cocina_casera/startCooking`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -285,8 +298,11 @@ class CocinaUI {
                 this.closeAllMenus();
                 this.showNotification(`🍳 Iniciando cocina: ${this.recipes[recipeKey].label}`, 'success');
             } else {
-                this.showNotification(data.error || 'Error al iniciar cocina', 'error');
+                this.showNotification(data.error || '❌ Error al iniciar cocina', 'error');
             }
+        }).catch(error => {
+            this.showNotification('❌ Error de conexión', 'error');
+            console.error('Error:', error);
         });
     }
 
@@ -313,7 +329,7 @@ class CocinaUI {
             this.currentMenu = 'stats';
             
             // Solicitar datos actualizados
-            fetch(`https://${GetParentResourceName()}/getStats`, {
+            fetch(`https://esx_cocina_casera/getStats`, {
                 method: 'POST'
             });
         } else {
@@ -332,7 +348,6 @@ class CocinaUI {
 
     renderSkillsList() {
         const skillsContent = document.getElementById('skills-content');
-        
         if (!skillsContent) return;
         
         const skills = [
@@ -375,8 +390,6 @@ class CocinaUI {
             this.closeAllMenus();
             menu.classList.remove('hidden');
             this.currentMenu = 'skills';
-            
-            // Actualizar lista de habilidades
             this.renderSkillsList();
         } else {
             this.closeAllMenus();
@@ -384,7 +397,7 @@ class CocinaUI {
     }
 
     // ====================================================================
-    // 6. SISTEMA DE NOTIFICACIONES
+    // 6. SISTEMA DE NOTIFICACIONES Y PROGRESO
     // ====================================================================
 
     showNotification(message, type = 'info') {
@@ -396,7 +409,6 @@ class CocinaUI {
         
         container.appendChild(notification);
         
-        // Auto-remover después de 5 segundos
         setTimeout(() => {
             if (notification.parentNode) {
                 notification.parentNode.removeChild(notification);
@@ -404,12 +416,7 @@ class CocinaUI {
         }, 5000);
     }
 
-    // ====================================================================
-    // 7. SISTEMA DE BARRAS DE PROGRESO
-    // ====================================================================
-
     showProgressBar(text, duration) {
-        // Crear barra de progreso si no existe
         let progressContainer = document.getElementById('progress-container');
         
         if (!progressContainer) {
@@ -423,12 +430,11 @@ class CocinaUI {
                 </div>
             `;
             document.body.appendChild(progressContainer);
-        } else {
-            document.getElementById('progress-fill').style.width = '0%';
-            progressContainer.querySelector('.progress-text').textContent = text;
         }
         
-        // Animar barra de progreso
+        document.getElementById('progress-fill').style.width = '0%';
+        progressContainer.querySelector('.progress-text').textContent = text;
+        
         let startTime = Date.now();
         const animateProgress = () => {
             const elapsed = Date.now() - startTime;
@@ -452,7 +458,7 @@ class CocinaUI {
     }
 
     // ====================================================================
-    // 8. CONTROL DE MENÚS
+    // 7. CONTROL DE MENÚS
     // ====================================================================
 
     toggleCookingMenu() {
@@ -463,8 +469,7 @@ class CocinaUI {
             menu.classList.remove('hidden');
             this.currentMenu = 'cooking';
             
-            // Solicitar recetas al servidor
-            fetch(`https://${GetParentResourceName()}/getRecipes`, {
+            fetch(`https://esx_cocina_casera/getRecipes`, {
                 method: 'POST'
             });
         } else {
@@ -480,8 +485,7 @@ class CocinaUI {
         });
         this.currentMenu = null;
         
-        // Enviar al juego que se cerraron los menús
-        fetch(`https://${GetParentResourceName()}/closeMenu`, {
+        fetch(`https://esx_cocina_casera/closeMenu`, {
             method: 'POST'
         });
     }
@@ -502,22 +506,8 @@ class CocinaUI {
     }
 
     // ====================================================================
-    // 9. FUNCIONES AUXILIARES
+    // 8. FUNCIONES AUXILIARES
     // ====================================================================
-
-    loadPlayerData() {
-        // Cargar datos iniciales del jugador
-        fetch(`https://${GetParentResourceName()}/getPlayerData`, {
-            method: 'POST'
-        }).then(resp => resp.json()).then(data => {
-            if (data.experience) {
-                this.updateExperience(data.experience);
-            }
-            if (data.stats) {
-                this.updateStats(data.stats);
-            }
-        });
-    }
 
     showExperiencePanel() {
         document.getElementById('experience-panel').style.display = 'block';
@@ -529,33 +519,25 @@ class CocinaUI {
 }
 
 // ====================================================================
-// 10. INICIALIZACIÓN DE LA APLICACIÓN
+// 9. INICIALIZACIÓN
 // ====================================================================
 
-// Esperar a que el DOM esté listo
 document.addEventListener('DOMContentLoaded', () => {
     window.cocinaUI = new CocinaUI();
     console.log('🍳 Interfaz de Cocina Casera inicializada correctamente');
 });
 
-// Funciones globales para llamadas desde HTML
+// Funciones globales para HTML
 function closeCookingMenu() {
-    if (window.cocinaUI) {
-        window.cocinaUI.closeCookingMenu();
-    }
+    if (window.cocinaUI) window.cocinaUI.closeCookingMenu();
 }
 
 function closeStats() {
-    if (window.cocinaUI) {
-        window.cocinaUI.closeStats();
-    }
+    if (window.cocinaUI) window.cocinaUI.closeStats();
 }
 
 function closeSkillsMenu() {
-    if (window.cocinaUI) {
-        window.cocinaUI.closeSkillsMenu();
-    }
+    if (window.cocinaUI) window.cocinaUI.closeSkillsMenu();
 }
 
-// Exportar para uso global
 window.CocinaUI = CocinaUI;
