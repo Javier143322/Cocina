@@ -1,31 +1,81 @@
--- ====================================================================
--- MÓDULO 4: ACTUALIZACIÓN DE MANIFIESTO (fxmanifest.lua)
--- Añade la carga del nuevo archivo de configuración.
--- ====================================================================
-
 fx_version 'cerulean'
-games { 'gta5' }
+game 'gta5'
 
-description 'Sistema de Cocina Casera - Construcción Paso a Paso'
-version '1.1.0' -- Versión actualizada
+name 'esx_cocina_casera'
+author 'TuNombre'
+description 'Sistema avanzado de cocina casera con estadísticas, misiones, mercado y experiencia'
+version '2.0.0'
 
--- Dependencias: Aseguramos que ESX esté cargado
+-- ====================================================================
+-- DEPENDENCIAS
+-- ====================================================================
 dependencies {
     'es_extended'
 }
 
+-- ====================================================================
+-- CONFIGURACIÓN COMPARTIDA
+-- ====================================================================
 shared_scripts {
-    'config.lua' -- CARGA EL ARCHIVO DE CONFIGURACIÓN PARA AMBOS LADOS
+    'config.lua'                    -- Configuración principal
 }
 
+-- ====================================================================
+-- SCRIPTS DEL CLIENTE
+-- ====================================================================
 client_scripts {
-    '@es_extended/config.lua',
-    'client.lua',
-    'fx_items.lua'
+    'client.lua',                   -- Cliente principal (EXISTENTE)
+    'fx_items.lua',                 -- Sistema de consumo (EXISTENTE)
+    'stats.lua',                    -- NUEVO: Estadísticas
+    'missions.lua',                 -- NUEVO: Misiones
+    'market.lua',                   -- NUEVO: Mercado
+    'experience.lua'                -- NUEVO: Experiencia avanzada
 }
 
+-- ====================================================================
+-- SCRIPTS DEL SERVIDOR
+-- ====================================================================
 server_scripts {
-    '@es_extended/config.lua',
-    'server.lua',
-    'fx_items.lua'
+    'server.lua',                   -- Servidor principal (EXISTENTE)
+    'stats.lua',                    -- NUEVO: Estadísticas
+    'missions.lua',                 -- NUEVO: Misiones  
+    'market.lua',                   -- NUEVO: Mercado
+    'experience.lua'                -- NUEVO: Experiencia avanzada
 }
+
+-- ====================================================================
+-- INTERFAZ DE USUARIO (NUEVO)
+-- ====================================================================
+ui_page 'html/ui.html'
+
+files {
+    'html/ui.html',
+    'html/css/styles.css',
+    'html/js/app.js',
+    'html/assets/icons/*.png',
+    'html/assets/sounds/*.ogg'
+}
+
+-- ====================================================================
+-- EXPORTACIONES
+-- ====================================================================
+exports {
+    'CanPlayerCook',
+    'GetPlayerRecipes', 
+    'StartCookingProcess',
+    'GetCookingStats',              -- NUEVA EXPORT
+    'GetActiveMissions'             -- NUEVA EXPORT
+}
+
+server_exports {
+    'RegisterNewRecipe',
+    'GetCookingStats',
+    'ValidateIngredients',
+    'GetMarketPrices',              -- NUEVA EXPORT
+    'GetPlayerExperience'           -- NUEVA EXPORT
+}
+
+-- ====================================================================
+-- COMPATIBILIDAD
+-- ====================================================================
+lua54 'yes'
